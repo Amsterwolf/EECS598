@@ -644,8 +644,8 @@ def mm_on_gpu(x: Tensor, w: Tensor) -> Tensor:
     #                      TODO: Implement this function                     #
     ##########################################################################
     # Replace "pass" statement with your code
-    gpu_x = x.to('mps')
-    gpu_w = w.to('mps')
+    gpu_x = x.to('cuda')
+    gpu_w = w.to('cuda')
     gpu_y = gpu_x.mm(gpu_w)
     y = gpu_y.cpu()
     ##########################################################################
