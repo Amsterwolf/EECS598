@@ -147,7 +147,10 @@ def nn_forward_pass(params: Dict[str, torch.Tensor], X: torch.Tensor):
     # shape (N, C).                                                            #
     ############################################################################
     # Replace "pass" statement with your code
-    pass
+    R1 = X.mm(W1)+b1.view(1,-1)# NXH
+    hidden= R1.maximum(torch.zeros_like(R1))
+    R2 =hidden.mm(W2)+b2.view(1,-1)
+    scores =R2
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -212,7 +215,13 @@ def nn_forward_backward(
     # (Check Numeric Stability in http://cs231n.github.io/linear-classify/).   #
     ############################################################################
     # Replace "pass" statement with your code
-    pass
+    scores-=scores.max(dim=1,keepdim=True)[0]
+    scores_exp = scores.exp()
+    scores_exp_sum = scores_exp.sum(dim=1,keepdim=True)
+    prob=(scores_exp/scores_exp_sum)[range(N),y]
+    loss =-prob.log().sum()
+    loss/=N
+    loss+= reg*((W1*W1).sum()+(W2*W2).sum())
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -226,7 +235,19 @@ def nn_forward_backward(
     # tensor of same size                                                     #
     ###########################################################################
     # Replace "pass" statement with your code
-    pass
+    dScores = 1.0/scores_exp_sum*scores_exp
+    dScores[range(N),y]-=1
+    dScores/=N
+    db2 = dScores.sum(dim=0)
+    dW2 =h1.t().mm(dScores)+reg*2*W2
+    dRelu =dScores.mm(W2.t())
+    dRelu[h1==0]=0
+    db1 = dRelu.sum(dim=0)
+    dW1 =X.t().mm(dRelu)+reg*2*W1
+    grads["b2"]=db2
+    grads["W2"]=dW2
+    grads["b1"]=db1
+    grads["W1"]=dW1
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -307,7 +328,10 @@ def nn_train(
         # stored in the grads dictionary defined above.                         #
         #########################################################################
         # Replace "pass" statement with your code
-        pass
+        params['W1']-=learning_rate*grads['W1']
+        params['W2']-=learning_rate*grads['W2']
+        params['b1']-=learning_rate*grads['b1']
+        params['b2']-=learning_rate*grads['b2']
         #########################################################################
         #                             END OF YOUR CODE                          #
         #########################################################################
@@ -365,7 +389,11 @@ def nn_predict(
     # TODO: Implement this function; it should be VERY simple!                #
     ###########################################################################
     # Replace "pass" statement with your code
-    pass
+    scores,_ = nn_forward_pass(params,X)
+    scores-=scores.max(dim=1,keepdim=True)[0]
+    scores_exp = scores.exp()
+    scores_exp_sum = scores_exp.sum(dim=1,keepdim=True)
+    y_pred = (scores_exp/scores_exp_sum).argmax(dim=1)
     ###########################################################################
     #                              END OF YOUR CODE                           #
     ###########################################################################
@@ -388,10 +416,10 @@ def nn_get_search_params():
     - learning_rate_decays: learning rate decay candidates
                                 e.g. [1.0, 0.95, ...]
     """
-    learning_rates = []
-    hidden_sizes = []
-    regularization_strengths = []
-    learning_rate_decays = []
+    learning_rates = [1.2]
+    learning_rate_decays = [0.94]
+    hidden_sizes = [700]
+    regularization_strengths = [1e-4]
     ###########################################################################
     # TODO: Add your own hyper parameter lists. This should be similar to the #
     # hyperparameters that you used for the SVM, but you may need to select   #
@@ -460,7 +488,30 @@ def find_best_net(
     # automatically like we did on the previous exercises.                      #
     #############################################################################
     # Replace "pass" statement with your code
-    pass
+    learning_rates,hidden_sizes,regularization_strengths,learning_rate_decays=get_param_set_fn()
+    best_dict={}
+    for lr in learning_rates:
+        for lrd in learning_rate_decays:
+            for hs in hidden_sizes:
+                for reg in regularization_strengths:
+                    stat_dict = {}
+                    net = TwoLayerNet(3 * 32 * 32, hs, 10, device=data_dict['X_train'].device, dtype=data_dict['X_train'].dtype)
+                    stats = net.train(data_dict['X_train'], data_dict['y_train'], data_dict['X_val'], data_dict['y_val'],
+                                num_iters=3000, batch_size=1000,
+                                learning_rate=lr, learning_rate_decay=lrd,
+                                reg=reg, verbose=False)
+                    val_acc_history = stats['val_acc_history']
+                    stat_dict['lr:{},lrd:{},hs:{},reg:{}'.format(lr,lrd,hs,reg)] = stats
+                    val_acc = torch.tensor(val_acc_history)[-1]
+                    print('val_acc: {:.3f}, train with learning rate: {:.2f}, learning rate decay: {:.2f}, hidden size: {:0.0f}, regularization: {:.2e}'.format(val_acc.item(),lr,lrd,hs,reg))
+                    if val_acc > best_val_acc:
+                        best_dict = {'acc':val_acc.item(),'lr':lr,'lrd':lrd,'hs':hs,'reg':reg}
+                        best_val_acc=val_acc
+                        best_net = net
+                        best_stat = stats
+                    # from eecs598.a2_helpers import plot_acc_curves
+                    # plot_acc_curves(stat_dict)
+    print('best_dict:',best_dict)
     #############################################################################
     #                               END OF YOUR CODE                            #
     #############################################################################
